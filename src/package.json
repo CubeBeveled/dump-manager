@@ -1,0 +1,23 @@
+{
+  "name": "dump-manager",
+  "version": "1.0.0",
+  "description": "",
+  "homepage": "https://github.com/CubeBeveled/dump-manager#readme",
+  "bugs": {
+    "url": "https://github.com/CubeBeveled/dump-manager/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CubeBeveled/dump-manager.git"
+  },
+  "license": "ISC",
+  "author": "Beveled Cube",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "node index.js"
+  },
+  "dependencies": {
+    "commander": "^14.0.2"
+  }
+}
