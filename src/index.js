@@ -24,9 +24,31 @@ program
   )
   .argument("<dump folder>", "The folder where the dumps will be stored")
   .argument("[dump file name]", "The name of the dump file")
-  .option("--repeat <delay>", "Keep saving dumps")
+  .option("--repeat <number>", "Keep saving dumps, delay in seconds")
+  .option("--keepCount <number>", "How many dumps should be kept", "3")
+  .option("--ssl", "Should we use ssl to connect ?")
   .action(
-    (host, port, database, username, password, dumpFolder, dumpFileName) => {
+    (
+      host,
+      port,
+      database,
+      username,
+      password,
+      dumpFolder,
+      dumpFileName,
+      opts,
+    ) => {
+      let dumpsToKeep;
+
+      if (opts.keepCount) {
+        try {
+          dumpsToKeep = parseInt(opts.keepCount);
+        } catch (err) {
+          console.log(err);
+          program.error("Invalid number of dumps to keep");
+        }
+      }
+
       saveDump(
         host,
         port,
@@ -35,10 +57,21 @@ program
         password,
         dumpFolder,
         dumpFileName,
+        opts.ssl,
+        opts.keepCount ? true : false,
+        dumpsToKeep,
       );
 
-      const opts = program.opts();
-      if (opts.repeat)
+      if (opts.repeat) {
+        let dumpInterval;
+
+        try {
+          dumpInterval = parseInt(opts.repeat);
+        } catch (err) {
+          console.log(err);
+          program.error("Invalid repeat delay");
+        }
+
         setInterval(() => {
           saveDump(
             host,
@@ -48,12 +81,16 @@ program
             password,
             dumpFolder,
             dumpFileName,
+            opts.ssl,
+            opts.keepCount ? true : false,
+            dumpsToKeep,
           );
-        });
+        }, dumpInterval * 1000);
+      }
     },
   );
 
-program.parse();
+program.parse(process.argv);
 
 function saveDump(
   host,
@@ -63,6 +100,9 @@ function saveDump(
   password,
   dumpFolder,
   dumpFileName,
+  ssl,
+  purgeDumps,
+  keepCount,
 ) {
   let testCmd;
 
@@ -72,7 +112,7 @@ function saveDump(
     testCmd = "which mysqldump";
   }
 
-  exec(testCmd, (error, stdout, stderr) => {
+  exec(testCmd, async (error, stdout, stderr) => {
     if (error || !stdout.trim()) {
       program.error("mysqldump not found");
     } else {
@@ -93,18 +133,47 @@ function saveDump(
 
       let dumpPath = path.join(dumpFolder, dumpFileName);
 
+      if (!fs.existsSync(dumpFolder))
+        fs.mkdirSync(dumpFolder, { recursive: true });
+
       if (fs.existsSync(dumpPath)) fs.rmSync(dumpPath);
 
-      exec(
-        `mysqldump -h "${host}" -P ${port} --password="${password}" -u "${username}" "${database}" > "${dumpPath}"`,
-        (error, stdout, stderr) => {
-          if (error) {
-            program.error(`Dump error: ${error.message}`);
-          }
+      async function dump() {
+        return new Promise((resolve, reject) => {
+          exec(
+            `mysqldump${ssl ? "" : " --skip-ssl"} -h "${host}" -P ${port} --password="${password}" -u "${username}" "${database}" > "${dumpPath}"`,
+            (error, stdout, stderr) => {
+              if (error) {
+                program.error(`Dump error: ${error.message}`);
+              }
 
-          console.log("Dump saved to", dumpPath);
-        },
-      );
+              console.log("Dump saved to", dumpPath);
+              resolve();
+            },
+          );
+        });
+      }
+
+      await dump();
+
+      const dumps = fs
+        .readdirSync(dumpFolder, { withFileTypes: true })
+        .filter((f) => f.isFile())
+        .map((f) => f.name)
+        .sort();
+
+      if (purgeDumps && dumps.length + 1 > keepCount) {
+        let count = 0;
+
+        for (const dump of dumps) {
+          const dumpToDeletePath = path.join(dumpFolder, dump);
+          console.log(`Deleting ${dumpToDeletePath}`);
+          fs.rmSync(dumpToDeletePath);
+
+          count++;
+          if (dumps.length - count <= keepCount) break;
+        }
+      }
     }
   });
 }
