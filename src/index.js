@@ -162,16 +162,16 @@ function saveDump(
         .map((f) => f.name)
         .sort();
 
-      if (purgeDumps && dumps.length + 1 > keepCount) {
-        let count = 0;
+      if (purgeDumps && dumps.length > keepCount) {
+        let deletedCount = 0;
 
         for (const dump of dumps) {
           const dumpToDeletePath = path.join(dumpFolder, dump);
           console.log(`Deleting ${dumpToDeletePath}`);
           fs.rmSync(dumpToDeletePath);
 
-          count++;
-          if (dumps.length - count <= keepCount) break;
+          deletedCount++;
+          if (dumps.length - deletedCount <= keepCount) break;
         }
       }
     }
